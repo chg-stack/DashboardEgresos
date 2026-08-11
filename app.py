@@ -165,7 +165,7 @@ if menu == "🏠 INICIO":
                 fig_line.update_xaxes(title="", categoryorder='array', categoryarray=orden_meses)
                 st.plotly_chart(fig_line, use_container_width=True)
 
-        with col_graf2:
+       with col_graf2:
             if "MES" in df.columns and "EGRESOS" in df.columns:
                 st.subheader("Costos vs Gastos (Pirámide)")
                 df_cg = df.groupby(["MES", "EGRESOS"], observed=False)["TOTAL EGRESOS"].sum().reset_index()
@@ -174,19 +174,27 @@ if menu == "🏠 INICIO":
                 # Transformación para efecto pirámide: Costos hacia la izquierda (negativo)
                 df_cg["VALOR_GRAFICO"] = df_cg.apply(lambda x: -x["TOTAL EGRESOS"] if x["EGRESOS"] == "COSTO" else x["TOTAL EGRESOS"], axis=1)
                 
+                # Modificación 1: Agregar text="TOTAL EGRESOS"
                 fig_cg = px.bar(df_cg, y="MES", x="VALOR_GRAFICO", color="EGRESOS", orientation='h',
                                 color_discrete_map={"COSTO": color_costo, "GASTO": color_gasto},
+                                text="TOTAL EGRESOS", 
                                 custom_data=["TOTAL EGRESOS"])
                 
                 fig_cg.update_layout(barmode='relative', xaxis_title="", yaxis_title="")
-                fig_cg.update_traces(hovertemplate="%{y} | %{color}<br>S/ %{customdata[0]:,.2f}")
+                
+                # Modificación 2: Configurar texttemplate y textposition
+                fig_cg.update_traces(
+                    hovertemplate="%{y} | %{color}<br>S/ %{customdata[0]:,.2f}",
+                    texttemplate="S/ %{text:,.2f}", # Formato de moneda. Si prefieres sin decimales usa "%{text:,.0f}"
+                    textposition="auto" # Ajusta el texto automáticamente adentro o afuera de la barra
+                )
+                
                 # Ordenar meses de Enero (arriba) a Diciembre (abajo)
                 fig_cg.update_yaxes(categoryorder='array', categoryarray=orden_meses[::-1])
                 # Ocultamos la escala X numérica para no mostrar números negativos
                 fig_cg.update_layout(xaxis=dict(showticklabels=False))
                 
                 st.plotly_chart(fig_cg, use_container_width=True)
-
         st.markdown("---")
 
         # 3. RANKINGS DETALLADOS (Tablas unificadas en Inicio)
