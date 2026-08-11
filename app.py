@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import os
 import io
+from datetime import datetime
 
 # 1. Configuración de la página
 st.set_page_config(page_title="Sistema de Egresos 2026", layout="wide", initial_sidebar_state="expanded")
@@ -84,7 +85,7 @@ def formato_dinero(val):
 st.sidebar.title("Navegación")
 menu = st.sidebar.radio("Ir a:", [
     "🏠 INICIO", 
-    "🏢 ANÁLISIS DE PROVEEDOR", 
+    "🏢 INTELIGENCIA DE PROVEEDORES", 
     "📥 GESTIÓN DE DATOS"
 ])
 
@@ -188,17 +189,7 @@ if menu == "🏠 INICIO":
 
         st.markdown("---")
 
-        # 3. TOP 10 PROVEEDORES (Gráfico de barras restaurado)
-        if "PROOVEDOR" in df.columns:
-            st.subheader("Top 10 Proveedores Principales")
-            top_prov_inicio = df.groupby("PROOVEDOR")["TOTAL EGRESOS"].sum().reset_index().sort_values(by="TOTAL EGRESOS", ascending=False).head(10)
-            fig_prov = px.bar(top_prov_inicio, x="TOTAL EGRESOS", y="PROOVEDOR", orientation='h', text_auto='.2s', color_discrete_sequence=[color_rojo_corp])
-            fig_prov.update_layout(yaxis={'categoryorder':'total ascending'})
-            st.plotly_chart(fig_prov, use_container_width=True)
-
-        st.markdown("---")
-
-        # 4. RANKINGS DETALLADOS (Tablas unificadas en Inicio)
+        # 3. RANKINGS DETALLADOS (Tablas unificadas en Inicio)
         st.subheader("Rankings Detallados (Desglose)")
         total_global = df["TOTAL EGRESOS"].sum()
         
@@ -256,63 +247,174 @@ if menu == "🏠 INICIO":
                     st.info("No hay datos de CAPEX registrados.")
 
 # ==========================================
-# RUTA 2: ANÁLISIS DE PROVEEDOR
+# RUTA 2: INTELIGENCIA DE PROVEEDORES
 # ==========================================
-elif menu == "🏢 ANÁLISIS DE PROVEEDOR":
-    if not df.empty and "PROOVEDOR" in df.columns:
-        lista_proveedores = df["PROOVEDOR"].dropna().unique().tolist()
-        lista_proveedores.sort()
-        prov_sel = st.selectbox("Busca y selecciona un Proveedor:", options=lista_proveedores)
-        
-        st.title(f"Detalle: {prov_sel}")
-        df_prov = df[df["PROOVEDOR"] == prov_sel]
-        
-        total_prov = df_prov['TOTAL EGRESOS'].sum()
-        capex_prov = df_prov[df_prov["INVERSIONES"] == "CAPEX"]["TOTAL EGRESOS"].sum() if "INVERSIONES" in df_prov.columns else 0
-        opex_prov = df_prov[df_prov["INVERSIONES"] == "OPEX"]["TOTAL EGRESOS"].sum() if "INVERSIONES" in df_prov.columns else 0
-        
-        c1, c2 = st.columns(2)
-        c1.metric("Monto Total Facturado", f"S/ {total_prov:,.2f}")
-        c2.metric("Inversión (CAPEX)", f"S/ {capex_prov:,.2f}")
-        
-        st.write("")
-        c3, c4 = st.columns(2)
-        c3.metric("Operación (OPEX)", f"S/ {opex_prov:,.2f}")
-        c4.metric("Cantidad de Registros", f"{len(df_prov)}")
-        
-        st.markdown("---")
-        
-        col_graf1, col_graf2 = st.columns(2)
-        with col_graf1:
-            if "MES" in df_prov.columns:
-                st.subheader("Tendencia de Gastos (Evolución)")
-                df_prov_mes = df_prov.groupby("MES", observed=False)["TOTAL EGRESOS"].sum().reset_index()
-                df_prov_mes["TOTAL EGRESOS"] = df_prov_mes["TOTAL EGRESOS"].fillna(0)
-                df_prov_mes = df_prov_mes.sort_values("MES")
-                
-                fig_prov_line = px.line(df_prov_mes, x="MES", y="TOTAL EGRESOS", markers=True, color_discrete_sequence=[color_rojo_corp])
-                fig_prov_line.update_traces(line_shape='spline', line=dict(width=3))
-                fig_prov_line.update_xaxes(title="", categoryorder='array', categoryarray=orden_meses)
-                st.plotly_chart(fig_prov_line, use_container_width=True)
+elif menu == "🏢 INTELIGENCIA DE PROVEEDORES":
+    st.title("Inteligencia de Proveedores")
 
-        with col_graf2:
-            st.subheader("Resumen de Actividad")
-            if "CONCEPTO" in df_prov.columns:
-                top_concepto = df_prov.groupby("CONCEPTO")["TOTAL EGRESOS"].sum().reset_index().sort_values(by="TOTAL EGRESOS", ascending=False).head(3)
-                st.markdown("**Conceptos más usados:**")
-                st.dataframe(top_concepto.style.format({"TOTAL EGRESOS": "S/ {:,.2f}"}), use_container_width=True, hide_index=True)
-                
-            if "AREA" in df_prov.columns:
-                top_area = df_prov.groupby("AREA")["TOTAL EGRESOS"].sum().reset_index().sort_values(by="TOTAL EGRESOS", ascending=False).head(3)
-                st.markdown("**Áreas de mayor impacto:**")
-                st.dataframe(top_area.style.format({"TOTAL EGRESOS": "S/ {:,.2f}"}), use_container_width=True, hide_index=True)
+    if df.empty or "PROOVEDOR" not in df.columns:
+        st.warning("La base de datos está vacía o no tiene columna de proveedores. Ve a 'Gestión de Datos'.")
+    else:
+        tab_resumen, tab_detalle = st.tabs(["📊 Resumen General", "🔎 Análisis Individual"])
 
-        st.markdown("---")
-        st.subheader("Desglose de Facturas del Proveedor")
-        # Columnas exactas solicitadas para la auditoría
-        columnas_mostrar = ["FECHA DE OPERACIÓN", "DESCRIPCIÓN", "INVERSIONES", "CONCEPTO", "SUB-CONCEPTO", "TOTAL EGRESOS"]
-        columnas_disp = [col for col in columnas_mostrar if col in df_prov.columns]
-        st.dataframe(df_prov[columnas_disp], use_container_width=True, hide_index=True)
+        # --- TAB 1: RESUMEN GENERAL (enfoque en gráficos, no en tabla) ---
+        with tab_resumen:
+            st.subheader("Resumen General de Proveedores")
+            st.caption("Vista rápida para identificar a qué proveedor conviene estudiar a detalle.")
+
+            total_global = df["TOTAL EGRESOS"].sum() if "TOTAL EGRESOS" in df.columns else 0
+
+            # Agregados base
+            resumen = df.groupby("PROOVEDOR").agg(
+                MONTO_TOTAL=("TOTAL EGRESOS", "sum"),
+                N_FACTURAS=("TOTAL EGRESOS", "count"),
+            ).reset_index()
+            resumen["% TOTAL"] = resumen["MONTO_TOTAL"] / total_global if total_global else 0
+
+            # CAPEX / OPEX por proveedor
+            if "INVERSIONES" in df.columns:
+                capex = df[df["INVERSIONES"] == "CAPEX"].groupby("PROOVEDOR")["TOTAL EGRESOS"].sum()
+                opex = df[df["INVERSIONES"] == "OPEX"].groupby("PROOVEDOR")["TOTAL EGRESOS"].sum()
+                resumen["CAPEX"] = resumen["PROOVEDOR"].map(capex).fillna(0)
+                resumen["OPEX"] = resumen["PROOVEDOR"].map(opex).fillna(0)
+
+            # Última compra y recencia (requiere parsear FECHA DE OPERACIÓN, guardada como texto dd/mm/yyyy)
+            if "FECHA DE OPERACIÓN" in df.columns:
+                fechas_parseadas = pd.to_datetime(df["FECHA DE OPERACIÓN"], format="%d/%m/%Y", errors="coerce")
+                ultima_compra = fechas_parseadas.groupby(df["PROOVEDOR"]).max()
+                resumen["ÚLTIMA COMPRA"] = resumen["PROOVEDOR"].map(ultima_compra)
+                hoy = pd.Timestamp(datetime.now().date())
+                resumen["DÍAS SIN COMPRAR"] = (hoy - resumen["ÚLTIMA COMPRA"]).dt.days
+
+            resumen = resumen.sort_values(by="MONTO_TOTAL", ascending=False)
+
+            # --- KPIs ---
+            top5_share = resumen.head(5)["MONTO_TOTAL"].sum() / total_global if total_global else 0
+            c1, c2, c3 = st.columns(3)
+            c1.metric("🏢 Proveedores Activos", f"{resumen['PROOVEDOR'].nunique()}")
+            if "DÍAS SIN COMPRAR" in resumen.columns:
+                inactivos_90 = (resumen["DÍAS SIN COMPRAR"] > 90).sum()
+                c2.metric("⏸️ Sin comprar +90 días", f"{inactivos_90}")
+            c3.metric("🎯 Concentración Top 5", f"{top5_share:.1%}", help="% del gasto total que representan los 5 proveedores más grandes")
+
+            st.markdown("---")
+
+            # --- FILA DE GRÁFICOS 1: Top 10 y Concentración ---
+            g1, g2 = st.columns(2)
+            top10 = resumen.head(10)
+
+            with g1:
+                st.markdown("**Top 10 Proveedores por Monto**")
+                fig_top10 = px.bar(top10, x="MONTO_TOTAL", y="PROOVEDOR", orientation="h", text_auto=".2s", color_discrete_sequence=[color_rojo_corp])
+                fig_top10.update_layout(yaxis={'categoryorder': 'total ascending'}, xaxis_title="", yaxis_title="")
+                st.plotly_chart(fig_top10, use_container_width=True)
+
+            with g2:
+                st.markdown("**Concentración de Gasto**")
+                resto = resumen["MONTO_TOTAL"].sum() - resumen.head(5)["MONTO_TOTAL"].sum()
+                df_conc = pd.concat([
+                    resumen.head(5)[["PROOVEDOR", "MONTO_TOTAL"]],
+                    pd.DataFrame([{"PROOVEDOR": "RESTO DE PROVEEDORES", "MONTO_TOTAL": resto}])
+                ])
+                fig_conc = px.pie(df_conc, values="MONTO_TOTAL", names="PROOVEDOR", hole=0.5,
+                                   color_discrete_sequence=px.colors.sequential.Reds_r)
+                fig_conc.update_traces(textinfo="percent+label", showlegend=False)
+                st.plotly_chart(fig_conc, use_container_width=True)
+
+            # --- FILA DE GRÁFICOS 2: CAPEX/OPEX y Recencia vs Monto ---
+            g3, g4 = st.columns(2)
+
+            with g3:
+                if "CAPEX" in resumen.columns:
+                    st.markdown("**CAPEX vs. OPEX (Top 10)**")
+                    df_co = top10.melt(id_vars="PROOVEDOR", value_vars=["CAPEX", "OPEX"], var_name="TIPO", value_name="MONTO")
+                    fig_co = px.bar(df_co, x="MONTO", y="PROOVEDOR", color="TIPO", orientation="h",
+                                     color_discrete_map={"CAPEX": color_costo, "OPEX": color_gasto})
+                    fig_co.update_layout(yaxis={'categoryorder': 'total ascending'}, xaxis_title="", yaxis_title="")
+                    st.plotly_chart(fig_co, use_container_width=True)
+
+            with g4:
+                if "DÍAS SIN COMPRAR" in resumen.columns:
+                    st.markdown("**A quién estudiar: Monto vs. Días sin Comprar**")
+                    st.caption("Arriba a la derecha = proveedores grandes que dejaron de comprar. Vale la pena revisarlos.")
+                    fig_bub = px.scatter(resumen, x="DÍAS SIN COMPRAR", y="MONTO_TOTAL", size="MONTO_TOTAL",
+                                          hover_name="PROOVEDOR", color_discrete_sequence=[color_rojo_corp])
+                    fig_bub.update_layout(xaxis_title="Días sin comprar", yaxis_title="Monto total (S/)")
+                    st.plotly_chart(fig_bub, use_container_width=True)
+
+            st.markdown("---")
+
+            # --- TABLA SIMPLE: solo Top 10 visible, resto en expander ---
+            st.markdown("**Top 10 — Detalle**")
+            cols_tabla = ["PROOVEDOR", "MONTO_TOTAL", "% TOTAL", "N_FACTURAS"]
+            if "DÍAS SIN COMPRAR" in resumen.columns:
+                cols_tabla.append("DÍAS SIN COMPRAR")
+            st.dataframe(
+                top10[cols_tabla].style.format({"MONTO_TOTAL": "S/ {:,.2f}", "% TOTAL": "{:.2%}"}),
+                use_container_width=True, hide_index=True
+            )
+
+            with st.expander("Ver listado completo de proveedores"):
+                st.dataframe(
+                    resumen[cols_tabla].style.format({"MONTO_TOTAL": "S/ {:,.2f}", "% TOTAL": "{:.2%}"}),
+                    use_container_width=True, hide_index=True
+                )
+
+        # --- TAB 2: ANÁLISIS INDIVIDUAL (drill-down por proveedor) ---
+        with tab_detalle:
+            lista_proveedores = df["PROOVEDOR"].dropna().unique().tolist()
+            lista_proveedores.sort()
+            prov_sel = st.selectbox("Busca y selecciona un Proveedor:", options=lista_proveedores)
+
+            st.subheader(f"Detalle: {prov_sel}")
+            df_prov = df[df["PROOVEDOR"] == prov_sel]
+
+            total_prov = df_prov['TOTAL EGRESOS'].sum()
+            capex_prov = df_prov[df_prov["INVERSIONES"] == "CAPEX"]["TOTAL EGRESOS"].sum() if "INVERSIONES" in df_prov.columns else 0
+            opex_prov = df_prov[df_prov["INVERSIONES"] == "OPEX"]["TOTAL EGRESOS"].sum() if "INVERSIONES" in df_prov.columns else 0
+
+            c1, c2 = st.columns(2)
+            c1.metric("Monto Total Facturado", f"S/ {total_prov:,.2f}")
+            c2.metric("Inversión (CAPEX)", f"S/ {capex_prov:,.2f}")
+
+            st.write("")
+            c3, c4 = st.columns(2)
+            c3.metric("Operación (OPEX)", f"S/ {opex_prov:,.2f}")
+            c4.metric("Cantidad de Registros", f"{len(df_prov)}")
+
+            st.markdown("---")
+
+            col_graf1, col_graf2 = st.columns(2)
+            with col_graf1:
+                if "MES" in df_prov.columns:
+                    st.subheader("Tendencia de Gastos (Evolución)")
+                    df_prov_mes = df_prov.groupby("MES", observed=False)["TOTAL EGRESOS"].sum().reset_index()
+                    df_prov_mes["TOTAL EGRESOS"] = df_prov_mes["TOTAL EGRESOS"].fillna(0)
+                    df_prov_mes = df_prov_mes.sort_values("MES")
+
+                    fig_prov_line = px.line(df_prov_mes, x="MES", y="TOTAL EGRESOS", markers=True, color_discrete_sequence=[color_rojo_corp])
+                    fig_prov_line.update_traces(line_shape='spline', line=dict(width=3))
+                    fig_prov_line.update_xaxes(title="", categoryorder='array', categoryarray=orden_meses)
+                    st.plotly_chart(fig_prov_line, use_container_width=True)
+
+            with col_graf2:
+                st.subheader("Resumen de Actividad")
+                if "CONCEPTO" in df_prov.columns:
+                    top_concepto = df_prov.groupby("CONCEPTO")["TOTAL EGRESOS"].sum().reset_index().sort_values(by="TOTAL EGRESOS", ascending=False).head(3)
+                    st.markdown("**Conceptos más usados:**")
+                    st.dataframe(top_concepto.style.format({"TOTAL EGRESOS": "S/ {:,.2f}"}), use_container_width=True, hide_index=True)
+
+                if "AREA" in df_prov.columns:
+                    top_area = df_prov.groupby("AREA")["TOTAL EGRESOS"].sum().reset_index().sort_values(by="TOTAL EGRESOS", ascending=False).head(3)
+                    st.markdown("**Áreas de mayor impacto:**")
+                    st.dataframe(top_area.style.format({"TOTAL EGRESOS": "S/ {:,.2f}"}), use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+            st.subheader("Desglose de Facturas del Proveedor")
+            # Columnas exactas solicitadas para la auditoría
+            columnas_mostrar = ["FECHA DE OPERACIÓN", "DESCRIPCIÓN", "INVERSIONES", "CONCEPTO", "SUB-CONCEPTO", "TOTAL EGRESOS"]
+            columnas_disp = [col for col in columnas_mostrar if col in df_prov.columns]
+            st.dataframe(df_prov[columnas_disp], use_container_width=True, hide_index=True)
 
 # ==========================================
 # RUTA 3: GESTIÓN DE DATOS
