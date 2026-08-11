@@ -164,8 +164,8 @@ if menu == "🏠 INICIO":
                 fig_line.update_traces(line_shape='spline', line=dict(width=3))
                 fig_line.update_xaxes(title="", categoryorder='array', categoryarray=orden_meses)
                 st.plotly_chart(fig_line, use_container_width=True)
-
-       with col_graf2:
+        
+        with col_graf2:
             if "MES" in df.columns and "EGRESOS" in df.columns:
                 st.subheader("Costos vs Gastos (Pirámide)")
                 df_cg = df.groupby(["MES", "EGRESOS"], observed=False)["TOTAL EGRESOS"].sum().reset_index()
@@ -195,7 +195,6 @@ if menu == "🏠 INICIO":
                 fig_cg.update_layout(xaxis=dict(showticklabels=False))
                 
                 st.plotly_chart(fig_cg, use_container_width=True)
-        st.markdown("---")
 
         # 3. RANKINGS DETALLADOS (Tablas unificadas en Inicio)
         st.subheader("Rankings Detallados (Desglose)")
