@@ -260,7 +260,7 @@ elif menu == "🏢 INTELIGENCIA DE PROVEEDORES":
         # --- TAB 1: RESUMEN GENERAL (enfoque en gráficos, no en tabla) ---
         with tab_resumen:
             st.subheader("Resumen General de Proveedores")
-            st.caption("Vista rápida para identificar a qué proveedor conviene estudiar a detalle.")
+            st.caption("Vista rápida")
 
             total_global = df["TOTAL EGRESOS"].sum() if "TOTAL EGRESOS" in df.columns else 0
 
