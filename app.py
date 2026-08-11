@@ -336,7 +336,7 @@ elif menu == "🏢 INTELIGENCIA DE PROVEEDORES":
             with g4:
                 if "DÍAS SIN COMPRAR" in resumen.columns:
                     st.markdown("**A quién estudiar: Monto vs. Días sin Comprar**")
-                    st.caption("Arriba a la derecha = proveedores grandes que dejaron de comprar. Vale la pena revisarlos.")
+                    st.caption("Arriba a la derecha = proveedores grandes que dejaron de comprar.")
                     fig_bub = px.scatter(resumen, x="DÍAS SIN COMPRAR", y="MONTO_TOTAL", size="MONTO_TOTAL",
                                           hover_name="PROOVEDOR", color_discrete_sequence=[color_rojo_corp])
                     fig_bub.update_layout(xaxis_title="Días sin comprar", yaxis_title="Monto total (S/)")
